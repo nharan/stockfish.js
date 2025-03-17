@@ -1,1 +1,1 @@
-./stockfish-17.js
+./stockfish-17-lite-single.js

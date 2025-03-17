@@ -161,6 +161,8 @@ class Position {
     int   rule50_count() const;
     Value non_pawn_material(Color c) const;
     Value non_pawn_material() const;
+    bool  is_self_capture_chess() const;
+    void  set_self_capture_chess(bool enable);
 
     // Position consistency check, for debugging
     bool pos_is_ok() const;
@@ -197,6 +199,7 @@ class Position {
     int        gamePly;
     Color      sideToMove;
     bool       chess960;
+    bool       selfCaptureChess = true;
 };
 
 std::ostream& operator<<(std::ostream& os, const Position& pos);
@@ -358,6 +361,10 @@ inline void Position::move_piece(Square from, Square to) {
 inline void Position::do_move(Move m, StateInfo& newSt) { do_move(m, newSt, gives_check(m)); }
 
 inline StateInfo* Position::state() const { return st; }
+
+inline bool Position::is_self_capture_chess() const { return selfCaptureChess; }
+
+inline void Position::set_self_capture_chess(bool enable) { selfCaptureChess = enable; }
 
 }  // namespace Stockfish
 

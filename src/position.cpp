@@ -567,8 +567,11 @@ bool Position::pseudo_legal(const Move m) const {
         return false;
 
     // The destination square cannot be occupied by a friendly piece
-    if (pieces(us) & to)
-        return false;
+    // UNLESS self-capture chess is enabled AND the piece is not a king
+    if (pieces(us) & to) {
+        if (!selfCaptureChess || type_of(piece_on(to)) == KING)
+            return false;
+    }
 
     // Handle the special case of a pawn move
     if (type_of(pc) == PAWN)
@@ -577,7 +580,7 @@ bool Position::pseudo_legal(const Move m) const {
         if ((Rank8BB | Rank1BB) & to)
             return false;
 
-        if (!(pawn_attacks_bb(us, from) & pieces(~us) & to)  // Not a capture
+        if (!(pawn_attacks_bb(us, from) & (pieces(~us) | (selfCaptureChess ? pieces(us) & ~pieces(us, KING) : 0)) & to)  // Not a capture
             && !((from + pawn_push(us) == to) && empty(to))  // Not a single push
             && !((from + 2 * pawn_push(us) == to)            // Not a double push
                  && (relative_rank(us, from) == RANK_2) && empty(to) && empty(to - pawn_push(us))))
@@ -598,10 +601,11 @@ bool Position::pseudo_legal(const Move m) const {
                 return false;
 
             // Our move must be a blocking interposition or a capture of the checking piece
-            if (!(between_bb(square<KING>(us), lsb(checkers())) & to))
+            if (!(between_bb(square<KING>(us), lsb(checkers())) & to)
+                && !(checkers() & to))
                 return false;
         }
-        // In case of king moves under check we have to remove the king so as to catch
+        // In case of king moves under check we have to remove king so as to catch
         // invalid moves like b1a1 when opposite queen is on c1.
         else if (attackers_to(to, pieces() ^ from) & pieces(~us))
             return false;
@@ -696,7 +700,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
     Piece  captured = m.type_of() == EN_PASSANT ? make_piece(them, PAWN) : piece_on(to);
 
     assert(color_of(pc) == us);
-    assert(captured == NO_PIECE || color_of(captured) == (m.type_of() != CASTLING ? them : us));
+    // Allow self-captures in self-capture chess mode, but still ensure the king cannot be captured
+    assert(captured == NO_PIECE || 
+           color_of(captured) == (m.type_of() != CASTLING ? them : us) || 
+           (selfCaptureChess && color_of(captured) == us && type_of(captured) != KING));
     assert(type_of(captured) != KING);
 
     if (m.type_of() == CASTLING)
@@ -733,7 +740,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
             st->pawnKey ^= Zobrist::psq[captured][capsq];
         }
         else
-            st->nonPawnMaterial[them] -= PieceValue[captured];
+            st->nonPawnMaterial[color_of(captured)] -= PieceValue[captured];
 
         dp.dirty_num = 2;  // 1 piece moved, 1 piece captured
         dp.piece[1]  = captured;

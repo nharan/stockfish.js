@@ -58,7 +58,9 @@ ExtMove* generate_pawn_moves(const Position& pos, ExtMove* moveList, Bitboard ta
     constexpr Direction UpLeft   = (Us == WHITE ? NORTH_WEST : SOUTH_EAST);
 
     const Bitboard emptySquares = ~pos.pieces();
-    const Bitboard enemies      = Type == EVASIONS ? pos.checkers() : pos.pieces(Them);
+    const Bitboard enemies      = Type == EVASIONS ? pos.checkers() : 
+                                 pos.pieces(Them) | (pos.is_self_capture_chess() && Type != EVASIONS ? 
+                                 pos.pieces(Us) & ~pos.pieces(Us, KING) : Bitboard(0));
 
     Bitboard pawnsOn7    = pos.pieces(Us, PAWN) & TRank7BB;
     Bitboard pawnsNotOn7 = pos.pieces(Us, PAWN) & ~TRank7BB;
@@ -179,8 +181,8 @@ ExtMove* generate_all(const Position& pos, ExtMove* moveList) {
     if (Type != EVASIONS || !more_than_one(pos.checkers()))
     {
         target = Type == EVASIONS     ? between_bb(ksq, lsb(pos.checkers()))
-               : Type == NON_EVASIONS ? ~pos.pieces(Us)
-               : Type == CAPTURES     ? pos.pieces(~Us)
+               : Type == NON_EVASIONS ? ~pos.pieces(Us) | (pos.is_self_capture_chess() ? pos.pieces(Us) & ~pos.pieces(Us, KING) : 0)
+               : Type == CAPTURES     ? pos.pieces(~Us) | (pos.is_self_capture_chess() ? pos.pieces(Us) & ~pos.pieces(Us, KING) : 0)
                                       : ~pos.pieces();  // QUIETS
 
         moveList = generate_pawn_moves<Us, Type>(pos, moveList, target);

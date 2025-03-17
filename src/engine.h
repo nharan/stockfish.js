@@ -27,6 +27,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <sstream>
 
 #include "nnue/network.h"
 #include "numa.h"
@@ -68,6 +69,7 @@ class Engine {
     void wait_for_search_finished();
     // set a new position, moves are in UCI format
     void set_position(const std::string& fen, const std::vector<std::string>& moves);
+    std::optional<std::string> position(std::istringstream& is);
 
     // modifiers
 
@@ -76,6 +78,7 @@ class Engine {
     void set_tt_size(size_t mb);
     void set_ponderhit(bool);
     void search_clear();
+    void set_self_capture_chess(const Option& o);
 
     void set_on_update_no_moves(std::function<void(const InfoShort&)>&&);
     void set_on_update_full(std::function<void(const InfoFull&)>&&);

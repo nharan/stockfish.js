@@ -106,6 +106,10 @@ Engine::Engine(std::string path) :
                                  Stockfish::Search::Skill::LowestElo,
                                  Stockfish::Search::Skill::HighestElo);
     options["UCI_ShowWDL"] << Option(false);
+    options["SelfCaptureChess"] << Option(true, [this](const Option& o) {
+        set_self_capture_chess(o);
+        return std::nullopt;
+    });
 #ifndef __NO_SYZYGY__
     options["SyzygyPath"] << Option("", [](const Option& o) {
         Tablebases::init(o);
@@ -175,27 +179,47 @@ void Engine::set_on_bestmove(std::function<void(std::string_view, std::string_vi
 
 void Engine::wait_for_search_finished() { threads.main_thread()->wait_for_search_finished(); }
 
-void Engine::set_position(const std::string& fen, const std::vector<std::string>& moves) {
-    // Drop the old state and create a new one
-    states = StateListPtr(new std::deque<StateInfo>(1));
-    pos.set(fen, options["UCI_Chess960"], &states->back());
+std::optional<std::string> Engine::position(std::istringstream& is) {
+    std::string token, fen;
+    is >> token;
 
-    capSq = SQ_NONE;
-    for (const auto& move : moves)
-    {
-        auto m = UCIEngine::to_move(pos, move);
-
-        if (m == Move::none())
-            break;
-
-        states->emplace_back();
-        pos.do_move(m, states->back());
-
-        capSq          = SQ_NONE;
-        DirtyPiece& dp = states->back().dirtyPiece;
-        if (dp.dirty_num > 1 && dp.to[1] == SQ_NONE)
-            capSq = m.to_sq();
+    if (token == "startpos") {
+        fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+        is >> token;  // Consume the "moves" token if any
+    } else if (token == "fen") {
+        while (is >> token && token != "moves")
+            fen += token + " ";
+    } else {
+        return "Error: Invalid position command";
     }
+
+    // Save the self-capture chess flag
+    bool selfCaptureFlag = pos.is_self_capture_chess();
+
+    // Set position without try/catch
+    pos.set(fen, pos.is_chess960(), &states->back());
+    
+    // Restore the self-capture chess flag
+    pos.set_self_capture_chess(selfCaptureFlag);
+    
+    states->emplace_back();
+
+    // Parse the move list if any
+    while (is >> token) {
+        Move m = UCIEngine::to_move(pos, token);
+        if (m == Move::none()) {
+            return "Error: Invalid move in position command: " + token;
+        }
+        
+        if (!pos.legal(m)) {
+            return "Error: Illegal move in position command: " + token;
+        }
+        
+        pos.do_move(m, states->back());
+        states->emplace_back();
+    }
+
+    return std::nullopt;
 }
 
 // modifiers
@@ -351,6 +375,31 @@ std::string Engine::thread_binding_information_as_string() const {
     }
 
     return ss.str();
+}
+
+void Engine::set_self_capture_chess(const Option& o) {
+    pos.set_self_capture_chess(o);
+}
+
+void Engine::set_position(const std::string& fen, const std::vector<std::string>& moves) {
+    // Save the self-capture chess flag
+    bool selfCaptureFlag = pos.is_self_capture_chess();
+
+    // Set position
+    pos.set(fen, pos.is_chess960(), &states->back());
+    
+    // Restore the self-capture chess flag
+    pos.set_self_capture_chess(selfCaptureFlag);
+
+    // Apply moves
+    for (const auto& move : moves) {
+        Move m = UCIEngine::to_move(pos, move);
+        if (m == Move::none())
+            break;
+        
+        states->emplace_back();
+        pos.do_move(m, states->back());
+    }
 }
 
 }
